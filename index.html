@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Подсчёт клеток — камера Горяева</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --ink:#1b2430; --muted:#6b7684; --line:#e3e7ec;
+    --live:#1f8a5b; --live-bg:#e8f6ef; --dead:#3157c9; --dead-bg:#eaf0ff;
+    --warn:#a5620b; --warn-bg:#fff4e2; --accent:#1b2430;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#12161c; --card:#1b2129; --ink:#e7ecf2; --muted:#93a0ae; --line:#2c3440;
+      --live:#4fd19a; --live-bg:#163428; --dead:#86a6ff; --dead-bg:#1c2848;
+      --warn:#f0b35a; --warn-bg:#3a2a12; --accent:#e7ecf2; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+  .wrap{max-width:860px;margin:0 auto;padding:20px 16px 48px}
+  h1{font-size:20px;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+  .step{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  textarea{width:100%;min-height:72px;resize:vertical;border:1px solid var(--line);border-radius:10px;
+    padding:10px 12px;font:18px/1.4 ui-monospace,Menlo,Consolas,monospace;background:var(--bg);color:var(--ink)}
+  textarea:focus,input:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;
+    padding:9px 14px;font:inherit;cursor:pointer}
+  button.primary{background:var(--accent);color:var(--card);border-color:var(--accent);font-weight:600}
+  button.rec{background:#c62828;border-color:#c62828;color:#fff}
+  .hint{color:var(--muted);font-size:13px}
+  .msg{font-size:13px;margin-top:8px;padding:8px 10px;border-radius:8px;background:var(--warn-bg);color:var(--warn);display:none}
+  .tbl{overflow-x:auto}
+  table{border-collapse:separate;border-spacing:4px;width:100%;min-width:560px}
+  th{font-size:12px;color:var(--muted);font-weight:500}
+  td.lab{font-weight:700;width:34px;text-align:center;border-radius:8px}
+  td.lab.L{color:var(--live);background:var(--live-bg)} td.lab.D{color:var(--dead);background:var(--dead-bg)}
+  td.sum{font-weight:700;text-align:center;font-variant-numeric:tabular-nums;min-width:48px}
+  table input{width:100%;min-width:38px;text-align:center;font:600 16px/1 system-ui;padding:9px 2px;
+    border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-variant-numeric:tabular-nums}
+  tr.L input{border-color:color-mix(in srgb,var(--live) 35%,var(--line))}
+  tr.D input{border-color:color-mix(in srgb,var(--dead) 35%,var(--line))}
+  input.flag{background:var(--warn-bg)!important}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:620px){.grid2{grid-template-columns:1fr}}
+  label.f{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
+  input.big{width:100%;font:600 22px/1 system-ui;padding:10px 12px;border:1px solid var(--line);
+    border-radius:10px;background:var(--bg);color:var(--ink)}
+  .results{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  @media (max-width:620px){.results{grid-template-columns:1fr}}
+  .res{border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .res .k{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.03em}
+  .res .v{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .res .u{font-size:13px;color:var(--muted)}
+  .res.main{border-color:var(--live);background:var(--live-bg)}
+  .warns{margin-top:10px}
+  .warns div{font-size:13px;padding:8px 10px;border-radius:8px;background:var(--warn-bg);color:var(--warn);margin-top:6px}
+  details{margin-top:10px} summary{cursor:pointer;color:var(--muted);font-size:13px}
+  .small{font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Подсчёт клеток на камере Горяева</h1>
+  <div class="sub">Окраска трипановым синим · 10 групп по 4 больших квадрата · VCD, TCD, выживаемость</div>
+
+  <div class="card">
+    <div class="step">1 · Ввод подсчёта</div>
+    <textarea id="txt" placeholder="Продиктуйте или введите пары «живые мёртвые»: 6 2, 3 4, 5 1 …" inputmode="text" autocomplete="off"></textarea>
+    <div class="row">
+      <button id="mic" class="primary">🎤 Диктовать</button>
+      <button id="clear">Очистить</button>
+      <span class="hint" id="cnt">0 / 10 групп</span>
+    </div>
+    <div class="msg" id="micmsg"></div>
+    <div class="hint" style="margin-top:8px">Можно цифрами или словами («шесть два, три четыре»). Если кнопка не работает, нажмите в поле и включите микрофон на клавиатуре телефона.</div>
+  </div>
+
+  <div class="card">
+    <div class="step">Таблица (можно править вручную)</div>
+    <div class="tbl"><table id="tab"></table></div>
+  </div>
+
+  <div class="card grid2">
+    <div>
+      <div class="step">2 · Разведение</div>
+      <label class="f" for="dil">Общий фактор разведения</label>
+      <input id="dil" class="big" type="number" min="0" step="any" value="2" inputmode="decimal">
+      <div class="hint" style="margin-top:6px">Учитывайте краситель: суспензия + трипановый синий 1:1 = 2.</div>
+    </div>
+    <div>
+      <div class="step">Коэффициент камеры</div>
+      <label class="f" for="k">×10⁶ кл/мл на 1 клетку (сумма 10 групп)</label>
+      <input id="k" class="big" type="number" min="0" step="any" value="0.00625" inputmode="decimal">
+      <div class="hint" style="margin-top:6px">0,00625 — 40 больших квадратов. 0,025 — 10 больших квадратов.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="step">3 · Результат</div>
+    <div class="results">
+      <div class="res main"><div class="k">VCD (живые)</div><div class="v" id="vcd">—</div><div class="u">×10⁶ кл/мл</div></div>
+      <div class="res"><div class="k">Viability</div><div class="v" id="via">—</div><div class="u">%</div></div>
+      <div class="res"><div class="k">TCD (всего)</div><div class="v" id="tcd">—</div><div class="u">×10⁶ кл/мл</div></div>
+    </div>
+    <div class="warns" id="warns"></div>
+    <div class="row">
+      <button id="copy">Скопировать результат</button>
+      <span class="hint" id="copied"></span>
+    </div>
+    <details>
+      <summary>Формулы</summary>
+      <div class="small" style="margin-top:6px;color:var(--muted)">
+        VCD = ΣL × разведение × коэффициент<br>
+        Viability = ΣL / (ΣL + ΣD) × 100<br>
+        TCD = VCD / (Viability/100) = (ΣL + ΣD) × разведение × коэффициент
+      </div>
+    </details>
+  </div>
+</div>
+
+<script>
+(function(){
+  var N = 10;
+  var L = new Array(N).fill(null), D = new Array(N).fill(null);
+  var $ = function(id){return document.getElementById(id)};
+  var txt=$('txt'), tab=$('tab'), dil=$('dil'), kIn=$('k');
+
+  // ---------- storage (optional) ----------
+  function sget(key){ try{return localStorage.getItem(key)}catch(e){return null} }
+  function sset(key,v){ try{localStorage.setItem(key,v)}catch(e){} }
+  var sk=sget('gor_k'); if(sk) kIn.value=sk;
+  var sd=sget('gor_dil'); if(sd) dil.value=sd;
+
+  // ---------- table ----------
+  function buildTable(){
+    var h='<tr><th></th>';
+    for(var i=0;i<N;i++) h+='<th>'+(i+1)+'</th>';
+    h+='<th>Σ</th></tr>';
+    ['L','D'].forEach(function(r){
+      h+='<tr class="'+r+'"><td class="lab '+r+'">'+r+'</td>';
+      for(var i=0;i<N;i++) h+='<td><input data-r="'+r+'" data-i="'+i+'" inputmode="numeric" aria-label="'+r+' группа '+(i+1)+'"></td>';
+      h+='<td class="sum" id="sum'+r+'">0</td></tr>';
+    });
+    tab.innerHTML=h;
+    tab.querySelectorAll('input').forEach(function(inp){
+      inp.addEventListener('input',function(){
+        var v=inp.value.replace(/\D/g,''); inp.value=v;
+        var arr=inp.dataset.r==='L'?L:D;
+        arr[+inp.dataset.i]= v===''?null:parseInt(v,10);
+        compute();
+      });
+    });
+  }
+  function fillTable(){
+    tab.querySelectorAll('input').forEach(function(inp){
+      var arr=inp.dataset.r==='L'?L:D, v=arr[+inp.dataset.i];
+      inp.value = v==null?'':v;
+    });
+  }
+
+  // ---------- parsing (digits + Russian words) ----------
+  var UNITS={'ноль':0,'нуль':0,'один':1,'одна':1,'одно':1,'раз':1,'два':2,'две':2,'три':3,'четыре':4,'пять':5,'шесть':6,
+    'семь':7,'восемь':8,'девять':9};
+  var TEENS={'десять':10,'одиннадцать':11,'двенадцать':12,'тринадцать':13,'четырнадцать':14,'пятнадцать':15,
+    'шестнадцать':16,'семнадцать':17,'восемнадцать':18,'девятнадцать':19};
+  var TENS={'двадцать':20,'тридцать':30,'сорок':40,'пятьдесят':50,'шестьдесят':60,'семьдесят':70,'восемьдесят':80,'девяносто':90};
+  var HUND={'сто':100,'двести':200,'триста':300};
+  function parseNumbers(s){
+    var toks=s.toLowerCase().replace(/ё/g,'е').split(/[^0-9а-я]+/).filter(Boolean);
+    var out=[], i=0;
+    while(i<toks.length){
+      var t=toks[i];
+      if(/^\d+$/.test(t)){ out.push(parseInt(t,10)); i++; continue; }
+      var val=null;
+      if(t in HUND){ val=HUND[t]; i++;
+        if(i<toks.length && toks[i] in TENS){ val+=TENS[toks[i]]; i++; if(i<toks.length && toks[i] in UNITS && UNITS[toks[i]]>0){ val+=UNITS[toks[i]]; i++; } }
+        else if(i<toks.length && toks[i] in TEENS){ val+=TEENS[toks[i]]; i++; }
+        else if(i<toks.length && toks[i] in UNITS && UNITS[toks[i]]>0){ val+=UNITS[toks[i]]; i++; }
+        out.push(val); continue; }
+      if(t in TENS){ val=TENS[t]; i++;
+        if(i<toks.length && toks[i] in UNITS && UNITS[toks[i]]>0){ val+=UNITS[toks[i]]; i++; }
+        out.push(val); continue; }
+      if(t in TEENS){ out.push(TEENS[t]); i++; continue; }
+      if(t in UNITS){ out.push(UNITS[t]); i++; continue; }
+      i++; // ignore other words ("и", "дальше" …)
+    }
+    return out;
+  }
+  function fromText(){
+    var nums=parseNumbers(txt.value);
+    L=new Array(N).fill(null); D=new Array(N).fill(null);
+    for(var j=0;j<nums.length && j<2*N;j++){
+      if(j%2===0) L[j>>1]=nums[j]; else D[j>>1]=nums[j];
+    }
+    fillTable(); compute();
+    var extra = nums.length>2*N ? ' · лишние числа проигнорированы' : '';
+    var odd = (nums.length%2===1 && nums.length<=2*N) ? ' · ждём число мёртвых' : '';
+    $('cnt').textContent=Math.min(N,Math.ceil(nums.length/2))+' / '+N+' групп'+odd+extra;
+  }
+  txt.addEventListener('input',fromText);
+
+  // ---------- compute ----------
+  function fmt(x,dig){
+    if(!isFinite(x)) return '—';
+    var s = x>=100 ? x.toFixed(0) : x.toPrecision(dig);
+    if(s.indexOf('e')>=0) s=x.toFixed(4);
+    return s.replace('.',',');
+  }
+  var last=null;
+  function compute(){
+    var sL=0,sD=0,filled=0,tot=[];
+    for(var i=0;i<N;i++){
+      if(L[i]!=null) sL+=L[i];
+      if(D[i]!=null) sD+=D[i];
+      if(L[i]!=null||D[i]!=null){ filled++; tot.push((L[i]||0)+(D[i]||0)); }
+    }
+    $('sumL').textContent=sL; $('sumD').textContent=sD;
+    var dv=parseFloat(String(dil.value).replace(',','.')), kv=parseFloat(String(kIn.value).replace(',','.'));
+    var w=[];
+    if(!(dv>0)) w.push('Укажите разведение больше 0.');
+    if(!(kv>0)) w.push('Укажите коэффициент камеры больше 0.');
+    var vcd=NaN,via=NaN,tcd=NaN;
+    if(sL+sD>0 && dv>0 && kv>0){
+      vcd=sL*dv*kv; via=sL/(sL+sD)*100; tcd=(sL+sD)*dv*kv;
+    } else if(sL+sD>0){ via=sL/(sL+sD)*100; }
+    $('vcd').textContent=fmt(vcd,3); $('via').textContent=fmt(via,3); $('tcd').textContent=fmt(tcd,3);
+
+    // quality checks
+    tab.querySelectorAll('input').forEach(function(x){x.classList.remove('flag')});
+    if(filled>0 && filled<N) w.push('Заполнено '+filled+' из '+N+' групп: коэффициент рассчитан на все 10, результат будет занижен.');
+    if(filled===N && sL+sD<100) w.push('Всего '+(sL+sD)+' клеток: точность низкая. Желательно 100–200 и больше, сконцентрируйте суспензию или разведите меньше.');
+    var big=tot.some(function(t){return t>200});
+    if(big) w.push('В группе больше 200 клеток: считать тяжело, растёт ошибка. Разведите сильнее.');
+    if(tot.length>=5){
+      var m=tot.reduce(function(a,b){return a+b},0)/tot.length;
+      if(m>0){
+        var sdv=Math.sqrt(tot.reduce(function(a,b){return a+(b-m)*(b-m)},0)/(tot.length-1));
+        var cv=sdv/m, lim=Math.max(0.3, 2/Math.sqrt(m));
+        if(cv>lim){
+          w.push('Большой разброс между группами (CV '+Math.round(cv*100)+'%). Проверьте перемешивание и заправку камеры, выделенные группы сильнее всего отклоняются от среднего.');
+          for(var i2=0,ti=0;i2<N;i2++){
+            if(L[i2]==null&&D[i2]==null) continue;
+            var t=tot[ti++];
+            if(Math.abs(t-m)>2*sdv && Math.abs(t-m)>2*Math.sqrt(m)){
+              tab.querySelectorAll('input[data-i="'+i2+'"]').forEach(function(x){x.classList.add('flag')});
+            }
+          }
+        }
+      }
+    }
+    $('warns').innerHTML=w.map(function(s){return '<div>⚠ '+s+'</div>'}).join('');
+    last={sL:sL,sD:sD,dv:dv,kv:kv,vcd:vcd,via:via,tcd:tcd};
+  }
+  dil.addEventListener('input',function(){sset('gor_dil',dil.value);compute()});
+  kIn.addEventListener('input',function(){sset('gor_k',kIn.value);compute()});
+
+  // ---------- buttons ----------
+  $('clear').addEventListener('click',function(){ txt.value=''; fromText(); txt.focus(); });
+  $('copy').addEventListener('click',function(){
+    if(!last) return;
+    var r=function(a){return a.map(function(v){return v==null?'-':v}).join('\t')};
+    var s='L\t'+r(L)+'\tΣ '+last.sL+'\nD\t'+r(D)+'\tΣ '+last.sD+
+      '\nРазведение: '+String(last.dv).replace('.',',')+'; коэффициент: '+String(last.kv).replace('.',',')+
+      '\nVCD: '+fmt(last.vcd,3)+' ×10^6 кл/мл\nViability: '+fmt(last.via,3)+' %\nTCD: '+fmt(last.tcd,3)+' ×10^6 кл/мл';
+    var done=function(){ $('copied').textContent='Скопировано'; setTimeout(function(){$('copied').textContent=''},2000); };
+    try{
+      navigator.clipboard.writeText(s).then(done,function(){fallback(s)&&done()});
+    }catch(e){ if(fallback(s)) done(); }
+  });
+  function fallback(s){
+    try{ var ta=document.createElement('textarea'); ta.value=s; document.body.appendChild(ta); ta.select();
+      var ok=document.execCommand('copy'); document.body.removeChild(ta);
+      if(!ok) $('copied').textContent='Не удалось скопировать'; return ok; }
+    catch(e){ $('copied').textContent='Не удалось скопировать'; return false; }
+  }
+
+  // ---------- speech ----------
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition, rec=null, on=false, base='';
+  var mic=$('mic'), msg=$('micmsg');
+  function showMsg(s){ msg.textContent=s; msg.style.display=s?'block':'none'; }
+  function setOn(v){ on=v; mic.textContent=v?'■ Стоп':'🎤 Диктовать'; mic.className=v?'rec':'primary'; }
+  var FALLBACK='Нажмите в поле ввода и используйте микрофон на клавиатуре телефона, или введите числа вручную.';
+  mic.addEventListener('click',function(){
+    if(!SR){ showMsg('Этот браузер не поддерживает распознавание речи. '+FALLBACK); txt.focus(); return; }
+    if(on){ try{rec.stop()}catch(e){} setOn(false); return; }
+    try{
+      rec=new SR(); rec.lang='ru-RU'; rec.continuous=true; rec.interimResults=true;
+      base=txt.value ? txt.value.replace(/\s*$/,' ') : '';
+      rec.onresult=function(ev){
+        var fin='', intr='';
+        for(var i=0;i<ev.results.length;i++){
+          if(ev.results[i].isFinal) fin+=ev.results[i][0].transcript+' ';
+          else intr+=ev.results[i][0].transcript;
+        }
+        txt.value=base+fin+intr; fromText();
+      };
+      rec.onerror=function(ev){
+        setOn(false);
+        if(ev.error==='not-allowed'||ev.error==='service-not-allowed')
+          showMsg('Доступ к микрофону в этом окне закрыт. '+FALLBACK);
+        else if(ev.error==='network') showMsg('Для распознавания речи нужен интернет. '+FALLBACK);
+        else if(ev.error!=='no-speech'&&ev.error!=='aborted') showMsg('Ошибка распознавания ('+ev.error+'). '+FALLBACK);
+      };
+      rec.onend=function(){ setOn(false); };
+      rec.start(); setOn(true); showMsg('');
+    }catch(e){ setOn(false); showMsg('Не удалось включить микрофон. '+FALLBACK); txt.focus(); }
+  });
+
+  buildTable(); fromText();
+})();
+</script>
+</body>
+</html>
