@@ -76,7 +76,7 @@
       <span class="hint" id="cnt">0 / 10 групп</span>
     </div>
     <div class="msg" id="micmsg"></div>
-    <div class="hint" style="margin-top:8px">Можно цифрами или словами («шесть два, три четыре»). Если кнопка не работает, нажмите в поле и включите микрофон на клавиатуре телефона.</div>
+    <div class="hint" style="margin-top:8px">Можно цифрами или словами («шесть ноль, пять один») с паузами. Если кнопка не работает, нажмите в поле и включите микрофон на клавиатуре телефона.</div>
   </div>
 
   <div class="card">
@@ -92,10 +92,10 @@
       <div class="hint" style="margin-top:6px">Учитывайте краситель: суспензия + трипановый синий 1:1 = 2.</div>
     </div>
     <div>
-      <div class="step">Коэффициент камеры</div>
-      <label class="f" for="k">×10⁶ кл/мл на 1 клетку (сумма 10 групп)</label>
+      <div class="step">Коэффициент пересчёта</div>
+      <label class="f" for="k">×10⁶ кл/мл, 1 / объём подсчёта</label>
       <input id="k" class="big" type="number" min="0" step="any" value="0.00625" inputmode="decimal">
-      <div class="hint" style="margin-top:6px">0,00625 — 40 больших квадратов. 0,025 — 10 больших квадратов.</div>
+      <div class="hint" style="margin-top:6px">0,00625 — 40 больших квадратов (1,6·10⁻⁴ мл).</div>
     </div>
   </div>
 
@@ -204,11 +204,12 @@
   txt.addEventListener('input',fromText);
 
   // ---------- compute ----------
-  function fmt(x,dig){
+  // Round half up to fixed decimals; toPrecision(12) strips binary float noise (87.6499999… → 87.65)
+  function fmt(x,dec){
     if(!isFinite(x)) return '—';
-    var s = x>=100 ? x.toFixed(0) : x.toPrecision(dig);
-    if(s.indexOf('e')>=0) s=x.toFixed(4);
-    return s.replace('.',',');
+    var p=Math.pow(10,dec);
+    var r=Math.round(Number((x*p).toPrecision(12)))/p;
+    return r.toFixed(dec).replace('.',',');
   }
   var last=null;
   function compute(){
@@ -222,17 +223,17 @@
     var dv=parseFloat(String(dil.value).replace(',','.')), kv=parseFloat(String(kIn.value).replace(',','.'));
     var w=[];
     if(!(dv>0)) w.push('Укажите разведение больше 0.');
-    if(!(kv>0)) w.push('Укажите коэффициент камеры больше 0.');
+    if(!(kv>0)) w.push('Укажите коэффициент пересчёта больше 0.');
     var vcd=NaN,via=NaN,tcd=NaN;
     if(sL+sD>0 && dv>0 && kv>0){
       vcd=sL*dv*kv; via=sL/(sL+sD)*100; tcd=(sL+sD)*dv*kv;
     } else if(sL+sD>0){ via=sL/(sL+sD)*100; }
-    $('vcd').textContent=fmt(vcd,3); $('via').textContent=fmt(via,3); $('tcd').textContent=fmt(tcd,3);
+    $('vcd').textContent=fmt(vcd,2); $('via').textContent=fmt(via,1); $('tcd').textContent=fmt(tcd,2);
 
     // quality checks
     tab.querySelectorAll('input').forEach(function(x){x.classList.remove('flag')});
     if(filled>0 && filled<N) w.push('Заполнено '+filled+' из '+N+' групп: коэффициент рассчитан на все 10, результат будет занижен.');
-    if(filled===N && sL+sD<100) w.push('Всего '+(sL+sD)+' клеток: точность низкая. Желательно 100–200 и больше, сконцентрируйте суспензию или разведите меньше.');
+    if(filled===N && sL+sD<50) w.push('Всего '+(sL+sD)+' клеток: точность низкая'+(sL+sD>0?' (погрешность ≈ ±'+Math.round(100/Math.sqrt(sL+sD))+'%)':'')+'. Желательно не меньше 50, сконцентрируйте суспензию или разведите меньше.');
     var big=tot.some(function(t){return t>200});
     if(big) w.push('В группе больше 200 клеток: считать тяжело, растёт ошибка. Разведите сильнее.');
     if(tot.length>=5){
@@ -265,7 +266,7 @@
     var r=function(a){return a.map(function(v){return v==null?'-':v}).join('\t')};
     var s='L\t'+r(L)+'\tΣ '+last.sL+'\nD\t'+r(D)+'\tΣ '+last.sD+
       '\nРазведение: '+String(last.dv).replace('.',',')+'; коэффициент: '+String(last.kv).replace('.',',')+
-      '\nVCD: '+fmt(last.vcd,3)+' ×10^6 кл/мл\nViability: '+fmt(last.via,3)+' %\nTCD: '+fmt(last.tcd,3)+' ×10^6 кл/мл';
+      '\nVCD: '+fmt(last.vcd,2)+' ×10^6 кл/мл\nViability: '+fmt(last.via,1)+' %\nTCD: '+fmt(last.tcd,2)+' ×10^6 кл/мл';
     var done=function(){ $('copied').textContent='Скопировано'; setTimeout(function(){$('copied').textContent=''},2000); };
     try{
       navigator.clipboard.writeText(s).then(done,function(){fallback(s)&&done()});
